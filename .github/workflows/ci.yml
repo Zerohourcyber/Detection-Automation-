@@ -1,0 +1,366 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Bandit security linter
+        run: |
+          pip install bandit[toml]
+          bandit -r automation/src/ -f json -o bandit-report.json || true
+
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-results
+          path: bandit-report.json
+
+  # Code Quality
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd automation
+          pip install -r requirements.txt
+          pip install flake8 black isort mypy
+
+      - name: Run Black formatter check
+        run: |
+          cd automation
+          black --check --diff src/
+
+      - name: Run isort import sorting check
+        run: |
+          cd automation
+          isort --check-only --diff src/
+
+      - name: Run Flake8 linter
+        run: |
+          cd automation
+          flake8 src/ --max-line-length=100 --extend-ignore=E203,W503
+
+      - name: Run MyPy type checking
+        run: |
+          cd automation
+          mypy src/ --ignore-missing-imports
+
+  # Detection Rules Validation
+  detection-rules:
+    name: Validate Detection Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Sigma tools
+        run: |
+          pip install pysigma pysigma-backend-elasticsearch pysigma-pipeline-sysmon
+
+      - name: Validate Sigma rules
+        run: |
+          find detection-rules/sigma -name "*.yml" -exec sigma check {} \;
+
+      - name: Convert Sigma to Elasticsearch
+        run: |
+          mkdir -p converted-rules/elasticsearch
+          find detection-rules/sigma -name "*.yml" -exec sigma convert -t elasticsearch {} \; > converted-rules/elasticsearch/rules.json
+
+      - name: Validate Wazuh rules XML
+        run: |
+          sudo apt-get update && sudo apt-get install -y libxml2-utils
+          find detection-rules/wazuh -name "*.xml" -exec xmllint --noout {} \;
+
+      - name: Upload converted rules
+        uses: actions/upload-artifact@v3
+        with:
+          name: converted-detection-rules
+          path: converted-rules/
+
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd automation
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        env:
+          REDIS_URL: redis://localhost:6379
+          VIRUSTOTAL_API_KEY: test-key
+          JIRA_URL: https://test.atlassian.net
+          JIRA_USERNAME: test@example.com
+          JIRA_API_TOKEN: test-token
+        run: |
+          cd automation
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: automation/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            automation/coverage.xml
+            automation/htmlcov/
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start test environment
+        run: |
+          cp .env.example .env
+          docker-compose -f docker-compose.yml up -d redis
+          sleep 10
+
+      - name: Build automation container
+        run: |
+          docker build -t detection-lab/automation:test automation/
+
+      - name: Run integration tests
+        run: |
+          docker run --rm --network detection-automation-lab_wazuh \
+            -e REDIS_URL=redis://redis:6379 \
+            -e VIRUSTOTAL_API_KEY=test-key \
+            detection-lab/automation:test \
+            python -m pytest tests/integration/ -v
+
+      - name: Cleanup test environment
+        if: always()
+        run: |
+          docker-compose down -v
+
+  # Docker Build and Push
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [security-scan, code-quality, unit-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: detectionlab/automation
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push automation image
+        uses: docker/build-push-action@v5
+        with:
+          context: automation/
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Documentation
+  documentation:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install documentation dependencies
+        run: |
+          pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+
+      - name: Build documentation
+        run: |
+          mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+
+  # Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up test environment
+        run: |
+          cp .env.example .env
+          docker-compose up -d
+
+      - name: Wait for services
+        run: |
+          sleep 60
+          curl --retry 10 --retry-delay 5 --retry-connrefused http://localhost:8000/health
+
+      - name: Run performance tests
+        run: |
+          pip install locust
+          locust -f tests/performance/locustfile.py --headless -u 10 -r 2 -t 60s --host http://localhost:8000
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+
+  # Deployment
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [integration-tests, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # Add your deployment logic here
+          # This could be Kubernetes, Docker Swarm, or cloud provider specific
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+          # Add smoke tests to verify deployment
+
+  # Notification
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [security-scan, code-quality, detection-rules, unit-tests, integration-tests]
+    if: always()
+    steps:
+      - name: Notify Slack
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#security-alerts'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Automated release from CI/CD pipeline
+            
+            Changes in this release:
+            ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false

@@ -1,0 +1,101 @@
+<!--
+  SSH Brute Force Detection Rule
+  MITRE ATT&CK: T1110.001 - Brute Force: Password Guessing
+  Description: Detects multiple failed SSH login attempts from the same source IP
+  Author: Detection Lab Team
+  Date: 2024-01-01
+-->
+
+<group name="ssh,authentication,">
+  
+  <!-- SSH Failed Login Attempt -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <srcip>!127.0.0.1</srcip>
+    <description>SSH authentication failed from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Brute Force - 5 failed attempts in 120 seconds -->
+  <rule id="100002" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <description>SSH brute force attack detected from $(srcip) - $(fts) failed attempts in 2 minutes</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,attack,pci_dss_11.4,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_SI.4,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Brute Force - High Volume (10+ attempts) -->
+  <rule id="100003" level="12" frequency="10" timeframe="300">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <description>SSH brute force attack - HIGH VOLUME from $(srcip) - $(fts) failed attempts in 5 minutes</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,attack,pci_dss_11.4,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_SI.4,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Brute Force - Multiple Users -->
+  <rule id="100004" level="11" frequency="8" timeframe="180">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <different_user />
+    <description>SSH brute force attack targeting multiple users from $(srcip) - $(fts) attempts across different accounts</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,attack,pci_dss_11.4,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_SI.4,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Successful Login After Failed Attempts -->
+  <rule id="100005" level="8">
+    <if_sid>5715</if_sid>
+    <if_matched_sid>100002</if_matched_sid>
+    <same_source_ip />
+    <description>SSH successful login from $(srcip) after previous brute force attempts - Potential compromise</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_success,attack,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Login from Blacklisted IP -->
+  <rule id="100006" level="12">
+    <if_sid>5715,5716</if_sid>
+    <list field="srcip" lookup="address_match_key">etc/lists/blacklist-ips</list>
+    <description>SSH connection attempt from blacklisted IP $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication,attack,blacklist,pci_dss_11.4,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_SI.4,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Root Login Attempt -->
+  <rule id="100007" level="8">
+    <if_sid>5716</if_sid>
+    <user>root</user>
+    <description>SSH failed login attempt for root user from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failed,invalid_login,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.8,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- SSH Connection from Unusual Geographic Location -->
+  <rule id="100008" level="6">
+    <if_sid>5715</if_sid>
+    <list field="srcip" lookup="not_address_match_key">etc/lists/allowed-countries</list>
+    <description>SSH successful login from unusual geographic location: $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_success,geographic_anomaly,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>

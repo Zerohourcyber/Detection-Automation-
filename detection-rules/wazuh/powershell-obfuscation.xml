@@ -1,0 +1,191 @@
+<!--
+  PowerShell Obfuscation Detection Rule
+  MITRE ATT&CK: T1059.001 - Command and Scripting Interpreter: PowerShell
+  Description: Detects obfuscated PowerShell commands and scripts
+  Author: Detection Lab Team
+  Date: 2024-01-01
+-->
+
+<group name="powershell,windows,execution,">
+
+  <!-- Base64 Encoded PowerShell Command -->
+  <rule id="100030" level="8">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*-e[ncodedcommand]*\s+[A-Za-z0-9+/]{20,}</field>
+    <description>PowerShell base64 encoded command execution detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell with Compression -->
+  <rule id="100031" level="9">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*frombase64string.*decompress</field>
+    <description>PowerShell compressed and encoded command detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell String Concatenation Obfuscation -->
+  <rule id="100032" level="7">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(\+.*){5,}</field>
+    <description>PowerShell string concatenation obfuscation detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Character Replacement Obfuscation -->
+  <rule id="100033" level="7">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*-replace.*-replace</field>
+    <description>PowerShell character replacement obfuscation detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Invoke Expression with Obfuscation -->
+  <rule id="100034" level="9">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(iex|invoke-expression).*(\$|`|\^)</field>
+    <description>PowerShell Invoke-Expression with obfuscated content detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Hidden Window Execution -->
+  <rule id="100035" level="8">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*-w(indowstyle)*\s+h(idden)*</field>
+    <description>PowerShell hidden window execution detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1564.003</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,stealth,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Bypass Execution Policy -->
+  <rule id="100036" level="8">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*-ex(ecutionpolicy)*\s+by(pass)*</field>
+    <description>PowerShell execution policy bypass detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1562.001</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,defense_evasion,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Download and Execute Pattern -->
+  <rule id="100037" level="10">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(downloadstring|downloadfile).*iex</field>
+    <description>PowerShell download and execute pattern detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1105</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,command_and_control,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Reflection Assembly Loading -->
+  <rule id="100038" level="9">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*\[reflection\.assembly\]::load</field>
+    <description>PowerShell reflection assembly loading detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1055</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,process_injection,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell AMSI Bypass Attempt -->
+  <rule id="100039" level="10">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(amsi|antimalware).*bypass</field>
+    <description>PowerShell AMSI bypass attempt detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1562.001</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,defense_evasion,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Suspicious Variable Names -->
+  <rule id="100040" level="7">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*\$[a-z]{1,3}=[^;]{20,}</field>
+    <description>PowerShell suspicious short variable names with long values detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Format String Obfuscation -->
+  <rule id="100041" level="8">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*-f.*\{[0-9]+\}.*\{[0-9]+\}</field>
+    <description>PowerShell format string obfuscation detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Tick Mark Obfuscation -->
+  <rule id="100042" level="7">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(`.*){5,}</field>
+    <description>PowerShell tick mark obfuscation detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Multiple Obfuscation Techniques -->
+  <rule id="100043" level="12" frequency="3" timeframe="60">
+    <if_matched_sid>100030,100031,100032,100033,100034,100035,100036,100037,100038,100039,100040,100041,100042</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple PowerShell obfuscation techniques detected from $(srcip) - Advanced threat activity</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,advanced_threat,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- PowerShell Empire/Cobalt Strike Indicators -->
+  <rule id="100044" level="11">
+    <if_sid>60009</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)powershell.*(empire|cobalt|beacon|meterpreter)</field>
+    <description>PowerShell command with known attack framework indicators detected</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1071.001</id>
+    </mitre>
+    <group>powershell_obfuscation,execution,attack_framework,pci_dss_10.2.7,pci_dss_11.4,gpg13_4.12,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>

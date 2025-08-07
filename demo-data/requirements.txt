@@ -1,0 +1,6 @@
+# Demo Data Generator Dependencies
+requests==2.31.0
+faker==20.1.0
+python-dateutil==2.8.2
+pyyaml==6.0.1
+schedule==1.2.1
